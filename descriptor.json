@@ -82,7 +82,7 @@
             "name": "Number of trees for phase 1",
             "set-by-server": false,
             "optional": false,
-            "default-value":10,
+            "default-value":50,
             "type": "Number"
         },
         {
@@ -92,7 +92,7 @@
             "name": "Number of features for phase 1",
             "set-by-server": false,
             "optional": false,
-            "default-value":200,
+            "default-value":100,
             "type": "Number"
         },
         {
@@ -102,7 +102,7 @@
             "name": "Radius for phase 1 sample extraction",
             "set-by-server": false,
             "optional": false,
-            "default-value":3,
+            "default-value":5,
             "type": "Number"
         },
         {
@@ -122,7 +122,7 @@
             "name": "Resizing factor",
             "set-by-server": false,
             "optional": false,
-            "default-value":50,
+            "default-value":0.5,
             "type": "Number"
         },
         {
@@ -152,7 +152,7 @@
             "name": "Number of samples for phase 2",
             "set-by-server": false,
             "optional": false,
-            "default-value":1000,
+            "default-value":5000,
             "type": "Number"
         },
         {
@@ -162,7 +162,7 @@
             "name": "Number of trees for phase 2",
             "set-by-server": false,
             "optional": false,
-            "default-value":3,
+            "default-value":50,
             "type": "Number"
         },
         {
