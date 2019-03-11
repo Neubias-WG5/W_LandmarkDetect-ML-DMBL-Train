@@ -1,0 +1,199 @@
+{
+    "name": "LandmarkDetect-ML-DMBL-Train",
+    "container-image": {
+        "image": "neubiaswg5/w_landmarkdetect-ml-dmbl-train",
+        "type": "singularity"
+    },
+    "schema-version": "cytomine-0.1",
+    "description": "Training phase of the DMBL Landmark Detection Algorithm",
+    "command-line": "python run.py CYTOMINE_HOST CYTOMINE_PUBLIC_KEY CYTOMINE_PRIVATE_KEY CYTOMINE_ID_PROJECT CYTOMINE_ID_SOFTWARE CYTOMINE_TRAINING_IMAGES MODEL_NJOBS MODEL_NT_P1 MODEL_F_P1 MODEL_R_P1 MODEL_SIGMA MODEL_DELTA MODEL_P MODEL_R_P2 MODEL_NS_P2 MODEL_NT_P2 MODEL_F_P2 MODEL_SDE MODEL_T",
+    "inputs": [
+        {
+        	"id": "cytomine_host",
+      		"value-key": "@ID",
+      		"command-line-flag": "--@id",
+      		"name": "Cytomine host",
+      		"set-by-server": true,
+      		"optional": false,
+      		"type": "String"
+    	},
+    	{
+			"id": "cytomine_public_key",
+			"value-key": "@ID",
+			"command-line-flag": "--@id",
+			"name": "Cytomine public key",
+            "set-by-server": true,
+			"optional": false,
+			"type": "String"
+    	},
+    	{
+    		"id": "cytomine_private_key",
+			"value-key": "@ID",
+			"command-line-flag": "--@id",
+			"name": "Cytomine private key",
+			"set-by-server": true,
+			"optional": false,
+			"type": "String"
+    	},
+		{
+			"id": "cytomine_id_project",
+			"value-key": "@ID",
+			"command-line-flag": "--@id",
+			"name": "Cytomine project ID",
+			"set-by-server": true,
+			"optional": false,
+			"type": "Number"
+    	},
+		{
+			"id": "cytomine_id_software",
+			"value-key": "@ID",
+			"command-line-flag": "--@id",
+			"name": "Cytomine software ID",
+			"set-by-server": true,
+			"optional": false,
+			"type": "Number"
+		},
+        {
+            "id": "cytomine_training_images",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Cytomine image IDs",
+            "set-by-server": false,
+            "optional": false,
+            "type": "ListDomain",
+	        "uri": "/api/project/$currentProject$/imageinstance.json?withoutLabel=true",
+	        "uri-print-attribute": "instanceFilename",
+	        "uri-sort-attribute": "instanceFilename"
+        },
+        {
+            "id": "model_njobs",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Number of jobs",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":1,
+            "type": "Number"
+        },
+        {
+            "id": "model_NT_P1",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Number of trees for phase 1",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":10,
+            "type": "Number"
+        },
+        {
+            "id": "model_F_P1",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Number of features for phase 1",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":200,
+            "type": "Number"
+        },
+        {
+            "id": "model_R_P1",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Radius for phase 1 sample extraction",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":3,
+            "type": "Number"
+        },
+        {
+            "id": "model_sigma",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Standard deviation for the gaussian",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":20,
+            "type": "Number"
+        },
+        {
+            "id": "model_delta",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Resizing factor",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":50,
+            "type": "Number"
+        },
+        {
+            "id": "model_P",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Proportion of not landmarks",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":3,
+            "type": "Number"
+        },
+        {
+            "id": "model_R_P2",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Radius for phase 2 sample extraction",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":3,
+            "type": "Number"
+        },
+        {
+            "id": "model_ns_P2",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Number of samples for phase 2",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":1000,
+            "type": "Number"
+        },
+        {
+            "id": "model_NT_P2",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Number of trees for phase 2",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":3,
+            "type": "Number"
+        },
+        {
+            "id": "model_F_P2",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Number of features for phase 2",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":100,
+            "type": "Number"
+        },
+        {
+            "id": "model_sde",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Standard deviation for gaussian phase 3",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":10,
+            "type": "Number"
+        },
+        {
+            "id": "model_T",
+            "value-key": "@ID",
+            "command-line-flag": "--@id",
+            "name": "Number of edges for phase 3",
+            "set-by-server": false,
+            "optional": false,
+            "default-value":5,
+            "type": "Number"
+        }
+    ]
+}
