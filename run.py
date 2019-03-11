@@ -426,11 +426,26 @@ def main():
 			domainClassName="be.cytomine.processing.Job"
 		).upload()
 
+		model_filename = joblib.dump(feature_offsets_1, os.path.join(out_path, 'offsets_phase1.joblib'), compress=3)[0]
+		AttachedFile(
+			conn.job,
+			domainIdent=conn.job.id,
+			filename=model_filename,
+			domainClassName="be.cytomine.processing.Job"
+		).upload()
+
 		for id_term in conn.monitor(term_list, start=20, end=80, period=0.05,prefix="Visual model building for terms..."):
 			(dataset, rep, number, feature_offsets_2) = build_phase_2_model(in_path, image_ids=tr_im, n_jobs=conn.parameters.model_njobs, NT=conn.parameters.model_NT_P2, F=conn.parameters.model_F_P2, R=conn.parameters.model_R_P2, N=conn.parameters.model_ns_P2, sigma=conn.parameters.model_sigma, delta=conn.parameters.model_delta, Xc = Xc[:, id_term-1], Yc = Yc[:, id_term-1])
 			reg = SeparateTreesRegressor(n_estimators=int(conn.parameters.model_NT_P2), n_jobs=int(conn.parameters.model_njobs))
 			reg.fit(dataset, rep)
 			model_filename = joblib.dump(reg, os.path.join(out_path, 'reg_%d_phase2.joblib'%id_term), compress=3)[0]
+			AttachedFile(
+				conn.job,
+				domainIdent=conn.job.id,
+				filename=model_filename,
+				domainClassName="be.cytomine.processing.Job"
+			).upload()
+			model_filename = joblib.dump(feature_offsets_2, os.path.join(out_path, 'offsets_%d_phase2.joblib' % id_term), compress=3)[0]
 			AttachedFile(
 				conn.job,
 				domainIdent=conn.job.id,
