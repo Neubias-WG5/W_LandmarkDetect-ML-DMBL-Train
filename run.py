@@ -26,12 +26,13 @@ import numpy as np
 from multiprocessing import Pool
 import scipy.ndimage as snd
 from sklearn.externals import joblib
-import sys
+import sys, os
 from neubiaswg5 import CLASS_LNDDET
 from neubiaswg5.helpers import NeubiasJob, prepare_data, get_discipline
 from cytomine.models import Job, AttachedFile, Property
 import joblib
 from sklearn.tree import ExtraTreeClassifier, ExtraTreeRegressor
+import imageio
 
 def dataset_from_coordinates(img, x, y, feature_offsets):
 	(h, w) = img.shape
@@ -46,7 +47,7 @@ def dataset_from_coordinates(img, x, y, feature_offsets):
 
 
 def image_dataset_phase_1(repository, image_number, x, y, feature_offsets, R_offsets, delta, P):
-	img = makesize(snd.zoom(readimage(repository, image_number), delta), 1)
+	img = makesize(snd.zoom(readimage(repository, image_number, image_type='tif'), delta), 1)
 
 	(h, w) = img.shape
 	mask = np.ones((h, w), 'bool')
@@ -134,7 +135,7 @@ def build_phase_1_model(repository, image_ids=[], n_jobs=1, NT=32, F=100, R=2, s
 
 
 def probability_map_phase_1(repository, image_number, clf, feature_offsets, delta):
-	img = makesize(snd.zoom(readimage(repository, image_number), delta), 1)
+	img = makesize(snd.zoom(readimage(repository, image_number, image_type='tif'), delta), 1)
 	(h, w) = img.shape
 	c = np.arange((h - 2) * (w - 2))
 	ys = 1 + np.round(c / (w - 2)).astype('int')
@@ -163,7 +164,7 @@ def probability_map_phase_1(repository, image_number, clf, feature_offsets, delt
 
 
 def image_dataset_phase_2(repository, image_number, x, y, feature_offsets, R_offsets, delta):
-	img = makesize(snd.zoom(readimage(repository, image_number), delta), 1)
+	img = makesize(snd.zoom(readimage(repository, image_number, image_type='tif'), delta), 1)
 	(h, w) = img.shape
 	mask = np.ones((h, w), 'bool')
 	mask[:, 0] = 0
@@ -189,21 +190,18 @@ def dataset_mp_helper_phase_2(jobargs):
 	return image_dataset_phase_2(*jobargs)
 
 
-def get_dataset_phase_2(repository, tr_images, image_ids, n_jobs, id_term, feature_offsets, R_offsets, delta):
+def get_dataset_phase_2(repository, image_ids, n_jobs, feature_offsets, R_offsets, delta, Xc, Yc):
 	p = Pool(n_jobs)
-	(Xc, Yc, Xp, Yp, ims) = getcoords(repository.rstrip('/') + '/txt/', id_term)
 	nims = Xc.size
 	jobargs = []
-
 	for i in range(nims):
-		if image_ids[i] in tr_images:
-			jobargs.append((repository, image_ids[i], Xc[i], Yc[i], feature_offsets, R_offsets, delta))
+		jobargs.append((repository, image_ids[i], Xc[i], Yc[i], feature_offsets, R_offsets, delta))
 
 	data = p.map(dataset_mp_helper_phase_2, jobargs)
 	p.close()
 	p.join()
 	(nroff, blc) = R_offsets.shape
-	nims = len(tr_images)
+	nims = len(image_ids)
 	DATASET = np.zeros((nims * nroff, feature_offsets[:, 0].size))
 	REP = np.zeros((nims * nroff, 2))
 	NUMBER = np.zeros(nims * nroff)
@@ -222,8 +220,7 @@ def get_dataset_phase_2(repository, tr_images, image_ids, n_jobs, id_term, featu
 	return DATASET, REP, NUMBER
 
 
-def build_phase_2_model(repository, tr_image=None, image_ids=None, n_jobs=1, IP=0, NT=32, F=100, R=3, N=500, sigma=10,
-						delta=0.25):
+def build_phase_2_model(repository, image_ids=None, n_jobs=1, NT=32, F=100, R=3, N=500, sigma=10, delta=0.25, Xc = None, Yc = None):
 	std_matrix = np.eye(2) * (sigma ** 2)
 	feature_offsets = np.round(np.random.multivariate_normal([0, 0], std_matrix, NT * F)).astype('int')
 	R_offsets = np.zeros((N, 2))
@@ -231,8 +228,7 @@ def build_phase_2_model(repository, tr_image=None, image_ids=None, n_jobs=1, IP=
 	ang = np.random.ranf(N) * 2 * np.pi
 	R_offsets[:, 0] = np.round((dis * np.cos(ang))).astype('int')
 	R_offsets[:, 1] = np.round((dis * np.sin(ang))).astype('int')
-	(dataset, rep, number) = get_dataset_phase_2(repository, tr_image, image_ids, n_jobs, IP, feature_offsets,
-												 R_offsets, delta)
+	(dataset, rep, number) = get_dataset_phase_2(repository, image_ids, n_jobs, feature_offsets, R_offsets, delta, Xc, Yc)
 	return dataset, rep, number, feature_offsets
 
 
@@ -323,9 +319,8 @@ class SeparateTrees:
 		n_features = w / self.n_estimators
 
 		p = Pool(self.n_jobs)
-		jobargs = [
-			(X[:, i * n_features:(i + 1) * n_features], y, self.max_features, self.max_depth, self.min_samples_split)
-			for i in range(self.n_estimators)]
+
+		jobargs = [(X[:, int(i * n_features):int((i + 1) * n_features)], y, self.max_features, self.max_depth, self.min_samples_split) for i in range(self.n_estimators)]
 		self.trees = p.map(separatetree_training_mp_helper, jobargs)
 		p.close()
 		p.join()
@@ -380,7 +375,7 @@ class SeparateTreesRegressor:
 		n_features = w / self.n_estimators
 
 		p = Pool(self.n_jobs)
-		jobargs = [(X[:, i * n_features:(i + 1) * n_features], y, self.max_features, self.max_depth, self.min_samples_split) for i in range(self.n_estimators)]
+		jobargs = [(X[:, int(i * n_features):int((i + 1) * n_features)], y, self.max_features, self.max_depth, self.min_samples_split) for i in range(self.n_estimators)]
 		self.trees = p.map(separatetree_reg_training_mp_helper, jobargs)
 		p.close()
 		p.join()
@@ -400,7 +395,7 @@ class SeparateTreesRegressor:
 def main():
 	with NeubiasJob.from_cli(sys.argv) as conn:
 		problem_cls = get_discipline(conn, default=CLASS_LNDDET)
-		conn.update_job_status(conn, status=Job.RUNNING, progress=0, status_comment="Initialization of the training phase...")
+		conn.job.update(progress=0, status=Job.RUNNING, statusComment="Initialization of the training phase...")
 		in_images, gt_images, in_path, gt_path, out_path, tmp_path = prepare_data(problem_cls, conn, is_2d=True, **conn.flags)
 
 		tmax = 1
@@ -419,8 +414,9 @@ def main():
 		for id_term in term_list:
 			Xc[:, id_term - 1] = xc[:, id_term - 1]
 			Yc[:, id_term - 1] = yc[:, id_term - 1]
+		conn.job.update(progress=10, status=Job.RUNNING, statusComment="Building model for phase 1")
 		(dataset, rep, img, feature_offsets_1) = build_phase_1_model(in_path, image_ids=tr_im, n_jobs=conn.parameters.model_njobs, F=conn.parameters.model_F_P1, R=conn.parameters.model_R_P1, sigma=conn.parameters.model_sigma, delta=conn.parameters.model_delta, P=conn.parameters.model_P, X=Xc, Y=Yc)
-		clf = SeparateTrees(n_estimators=conn.parameters.model_NT_P1, n_jobs=conn.parameters.model_njobs)
+		clf = SeparateTrees(n_estimators=int(conn.parameters.model_NT_P1), n_jobs=int(conn.parameters.model_njobs))
 		clf = clf.fit(dataset, rep)
 		model_filename = joblib.dump(clf, os.path.join(out_path, 'model_phase1.joblib'), compress=3)[0]
 		AttachedFile(
@@ -430,9 +426,9 @@ def main():
 			domainClassName="be.cytomine.processing.Job"
 		).upload()
 
-		for id_term in term_list:
-			(dataset, rep, number, feature_offsets_2) = build_phase_2_model(in_path, image_ids=tr_im, n_jobs=conn.parameters.model_njobs, IP=id_term, NT=conn.parameters.model_NT_P2, F=conn.parameters.model_F_P2, R=conn.parameters.model_R_P2, N=conn.parameters.model_ns_P2, sigma=conn.parameters.model_sigma, delta=conn.parameters.model_delta)
-			reg = SeparateTreesRegressor(n_estimators=conn.parameters.model_NT_P2, n_jobs=conn.parameters.model_njobs)
+		for id_term in conn.monitor(term_list, start=20, end=80, period=0.05,prefix="Visual model building for terms..."):
+			(dataset, rep, number, feature_offsets_2) = build_phase_2_model(in_path, image_ids=tr_im, n_jobs=conn.parameters.model_njobs, NT=conn.parameters.model_NT_P2, F=conn.parameters.model_F_P2, R=conn.parameters.model_R_P2, N=conn.parameters.model_ns_P2, sigma=conn.parameters.model_sigma, delta=conn.parameters.model_delta, Xc = Xc[:, id_term-1], Yc = Yc[:, id_term-1])
+			reg = SeparateTreesRegressor(n_estimators=int(conn.parameters.model_NT_P2), n_jobs=int(conn.parameters.model_njobs))
 			reg.fit(dataset, rep)
 			model_filename = joblib.dump(reg, os.path.join(out_path, 'reg_%d_phase2.joblib'%id_term), compress=3)[0]
 			AttachedFile(
@@ -442,6 +438,7 @@ def main():
 				domainClassName="be.cytomine.processing.Job"
 			).upload()
 
+		conn.job.update(progress=90, status=Job.RUNNING, statusComment="Building model for phase 3")
 		edges = build_edgematrix_phase_3(Xc, Yc, conn.parameters.model_sde, conn.parameters.model_delta, conn.parameters.model_T)
 		model_filename = joblib.dump(edges, os.path.join(out_path, 'model_edges.joblib'), compress=3)[0]
 		AttachedFile(
@@ -456,6 +453,6 @@ def main():
 			sfinal += "%d " % id_term
 		sfinal = sfinal.rstrip(' ')
 		Property(conn.job, key="id_terms", value=sfinal.rstrip(" ")).save()
-
+		conn.job.update(progress=100, status=Job.TERMINATED, statusComment="Job terminated.")
 if __name__ == "__main__":
 	main()
