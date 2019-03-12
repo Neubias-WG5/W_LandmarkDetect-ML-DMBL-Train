@@ -426,6 +426,14 @@ def main():
 			domainClassName="be.cytomine.processing.Job"
 		).upload()
 
+		model_filename = joblib.dump((Xc, Yc), os.path.join(out_path, 'coords.joblib'), compress=3)[0]
+		AttachedFile(
+			conn.job,
+			domainIdent=conn.job.id,
+			filename=model_filename,
+			domainClassName="be.cytomine.processing.Job"
+		).upload()
+
 		model_filename = joblib.dump(feature_offsets_1, os.path.join(out_path, 'offsets_phase1.joblib'), compress=3)[0]
 		AttachedFile(
 			conn.job,
