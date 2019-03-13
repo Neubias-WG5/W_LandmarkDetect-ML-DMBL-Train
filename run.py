@@ -34,18 +34,6 @@ import joblib
 from sklearn.tree import ExtraTreeClassifier, ExtraTreeRegressor
 import imageio
 
-def dataset_from_coordinates(img, x, y, feature_offsets):
-	(h, w) = img.shape
-	original_values = img[y.clip(min=0, max=h - 1), x.clip(min=0, max=w - 1)]
-	dataset = np.zeros((x.size, feature_offsets[:, 0].size))
-
-	for i in range(feature_offsets[:, 0].size):
-		dataset[:, i] = original_values - img[
-			(y + feature_offsets[i, 1]).clip(min=0, max=h - 1), (x + feature_offsets[i, 0]).clip(min=0, max=w - 1)]
-
-	return dataset
-
-
 def image_dataset_phase_1(repository, image_number, x, y, feature_offsets, R_offsets, delta, P):
 	img = makesize(snd.zoom(readimage(repository, image_number, image_type='tif'), delta), 1)
 
@@ -132,36 +120,6 @@ def build_phase_1_model(repository, image_ids=[], n_jobs=1, NT=32, F=100, R=2, s
 	R_offsets = np.array(R_offsets).astype('int')
 	(dataset, rep, img) = get_dataset_phase_1(repository, image_ids, n_jobs, feature_offsets, R_offsets, delta, P, X, Y)
 	return dataset, rep, img, feature_offsets
-
-
-def probability_map_phase_1(repository, image_number, clf, feature_offsets, delta):
-	img = makesize(snd.zoom(readimage(repository, image_number, image_type='tif'), delta), 1)
-	(h, w) = img.shape
-	c = np.arange((h - 2) * (w - 2))
-	ys = 1 + np.round(c / (w - 2)).astype('int')
-	xs = 1 + np.mod(c, (w - 2))
-	step = 20000
-	b = 0
-	probability_map = None
-	nldms = -1
-
-	while b < xs.size:
-
-		next_b = min(b + step, xs.size)
-		dataset = dataset_from_coordinates(img, xs[b:next_b], ys[b:next_b], feature_offsets)
-		probabilities = clf.predict_proba(dataset)
-
-		if (nldms == -1):
-			(ns, nldms) = probabilities.shape
-			probability_map = np.zeros((h - 2, w - 2, nldms))
-
-		for ip in range(nldms):
-			probability_map[ys[b:next_b] - 1, xs[b:next_b] - 1, ip] = probabilities[:, ip]
-
-		b = next_b
-
-	return probability_map
-
 
 def image_dataset_phase_2(repository, image_number, x, y, feature_offsets, R_offsets, delta):
 	img = makesize(snd.zoom(readimage(repository, image_number, image_type='tif'), delta), 1)
@@ -282,115 +240,6 @@ def	get_neubias_coords(gt_path, tr_im):
 			xrs[i, id_term-1] = xr
 			yrs[i, id_term-1] = yr
 	return np.array(xcs), np.array(ycs), np.array(xrs), np.array(yrs)
-
-
-def build_separate_tree(X, y, max_features, max_depth, min_samples_split):
-	clf = ExtraTreeClassifier(max_features=max_features, max_depth=max_depth, min_samples_split=min_samples_split)
-	clf = clf.fit(X, y)
-	return clf
-
-
-def separatetree_training_mp_helper(jobargs):
-	return build_separate_tree(*jobargs)
-
-
-def separatetree_test_mp_helper(jobargs):
-	return test_separate_tree(*jobargs)
-
-
-def test_separate_tree(tree, X):
-	return tree.predict_proba(X)
-
-
-class SeparateTrees:
-
-	def __init__(self, n_estimators=10, max_features='auto', max_depth=None, min_samples_split=2, n_jobs=1):
-		self.n_estimators = n_estimators
-		self.max_features = max_features
-		self.max_depth = max_depth
-		self.min_samples_split = min_samples_split
-		self.n_jobs = n_jobs
-
-	def fit(self, X, y):
-		self.trees = []
-		self.n_classes = np.max(y) + 1
-
-		(h, w) = X.shape
-		n_features = w / self.n_estimators
-
-		p = Pool(self.n_jobs)
-
-		jobargs = [(X[:, int(i * n_features):int((i + 1) * n_features)], y, self.max_features, self.max_depth, self.min_samples_split) for i in range(self.n_estimators)]
-		self.trees = p.map(separatetree_training_mp_helper, jobargs)
-		p.close()
-		p.join()
-
-		return self
-
-	def predict_proba(self, X):
-		(h, w) = X.shape
-		n_features = w / self.n_estimators
-		p = Pool(self.n_jobs)
-		jobargs = [(self.trees[i], X[:, i * n_features:(i + 1) * n_features]) for i in range(self.n_estimators)]
-		probas = p.map(separatetree_test_mp_helper, jobargs)
-		p.close()
-		p.join()
-		return np.sum(probas, axis=0) / float(self.n_estimators)
-
-	def predict(self, X):
-		probas = self.predict_proba(X)
-		return np.argmax(probas, axis=1)
-
-def build_separate_tree_regressor(X, y, max_features, max_depth, min_samples_split):
-	clf = ExtraTreeRegressor(max_features=max_features, max_depth=max_depth, min_samples_split=min_samples_split)
-	clf = clf.fit(X, y)
-	return clf
-
-
-def separatetree_reg_training_mp_helper(jobargs):
-	return build_separate_tree_regressor(*jobargs)
-
-
-def separatetree_reg_test_mp_helper(jobargs):
-	return test_separate_tree_reg(*jobargs)
-
-
-def test_separate_tree_reg(tree, X):
-	return tree.predict(X)
-
-
-class SeparateTreesRegressor:
-	def __init__(self, n_estimators=10, max_features='auto', max_depth=None, min_samples_split=2, n_jobs=1):
-		self.n_estimators = n_estimators
-		self.max_features = max_features
-		self.max_depth = max_depth
-		self.min_samples_split = min_samples_split
-		self.n_jobs = n_jobs
-
-	def fit(self, X, y):
-		self.trees = []
-		self.n_classes = np.max(y) + 1
-
-		(h, w) = X.shape
-		n_features = w / self.n_estimators
-
-		p = Pool(self.n_jobs)
-		jobargs = [(X[:, int(i * n_features):int((i + 1) * n_features)], y, self.max_features, self.max_depth, self.min_samples_split) for i in range(self.n_estimators)]
-		self.trees = p.map(separatetree_reg_training_mp_helper, jobargs)
-		p.close()
-		p.join()
-
-		return self
-
-	def predict(self, X):
-		(h, w) = X.shape
-		n_features = w / self.n_estimators
-		p = Pool(self.n_jobs)
-		jobargs = [(self.trees[i], X[:, i * n_features:(i + 1) * n_features]) for i in range(self.n_estimators)]
-		probas = p.map(separatetree_reg_test_mp_helper, jobargs)
-		p.close()
-		p.join()
-		return np.sum(probas, axis=0) / float(self.n_estimators)
 
 def main():
 	with NeubiasJob.from_cli(sys.argv) as conn:
